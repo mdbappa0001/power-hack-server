@@ -18,7 +18,15 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 async function run(){
 try{
     await client.connect();
-    console.log('Database Connected')
+    const billCollection = client.db("powerHack").collection("bills");
+
+    app.get('/billing-list', async (req, res) => {
+        const query = {}
+        const page = parseInt(req.query.page)
+        const size = 10;
+        const result = await billCollection.find(query).skip(page*10).limit(size).toArray()
+        res.send({ result })
+    })
 }
 finally{
 
