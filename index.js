@@ -33,6 +33,13 @@ try{
         res.send({ count })
     })
 
+    app.delete('/delete-billing/:id', async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: ObjectId(id) }
+        const result = await billCollection.deleteOne(query);
+        res.send(result);
+    })
+
 }
 finally{
 
