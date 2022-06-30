@@ -27,6 +27,12 @@ try{
         const result = await billCollection.find(query).skip(page*10).limit(size).toArray()
         res.send({ result })
     })
+
+    app.get('/billingCount', async (req, res) => {
+        const count = await billCollection.estimatedDocumentCount()
+        res.send({ count })
+    })
+
 }
 finally{
 
