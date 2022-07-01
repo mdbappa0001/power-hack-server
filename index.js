@@ -16,49 +16,95 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 
 
 async function run() {
-  try {
-      await client.connect();
-      const billCollection = client.db("powerHack").collection("bills");
+    try {
+        await client.connect();
+        const billCollection = client.db("powerHack").collection("bills");
+        const userCollection = client.db("powerHack").collection("user");
 
-      app.get('/billing-list', async (req, res) => {
-          const query = {}
-          const page = parseInt(req.query.page)
-          const searched = req.query.searched
-          const size = 10;
-          const result = await billCollection.find(query).skip(page * 10).limit(size).toArray()
-          res.send({ result })
-      })
-      app.get('/billingCount', async (req, res) => {
-          const count = await billCollection.estimatedDocumentCount()
-          res.send({ count })
-      })
+        app.get('/billing-list', async (req, res) => {
+            const query = {}
+            const page = parseInt(req.query.page)
+            const searched = req.query.searched
+            const size = 10;
+            const result = await billCollection.find(query).sort({ _id: -1 }).skip(page * 10).limit(size).toArray()
+            res.send({ result })
+        })
+        app.get('/billingCount', async (req, res) => {
+            const count = await billCollection.estimatedDocumentCount()
+            res.send({ count })
+        })
 
-      app.post('/add-billing', async (req, res) => {
-          const billing = req.body;
-          const result = await billCollection.insertOne(billing)
-          res.send(result)
-      })
-      app.put('/update-billing/:id', async (req, res) => {
-          const id = req.params.id;
-          const newBill = req.body;
-          const filter = { _id: ObjectId(id) }
-          const options = { upsert: true }
-          const updateDoc = {
-              $set: newBill
-          };
-          const result = await billCollection.updateOne(filter, updateDoc, options)
-          res.send(result)
-      })
 
-      app.delete('/delete-billing/:id', async (req, res) => {
-          const id = req.params.id;
-          const query = { _id: ObjectId(id) }
-          const result = await billCollection.deleteOne(query);
-          res.send(result);
-      })
-  } finally {
 
-  }
+        app.post('/add-billing', async (req, res) => {
+            const billing = req.body;
+            const result = await billCollection.insertOne(billing)
+            res.send(result)
+        })
+        app.put('/update-billing/:id', async (req, res) => {
+            const id = req.params.id;
+            const newBill = req.body;
+            const filter = { _id: ObjectId(id) }
+            const options = { upsert: true }
+            const updateDoc = {
+                $set: newBill
+            };
+            const result = await billCollection.updateOne(filter, updateDoc, options)
+            res.send(result)
+        })
+
+        app.delete('/delete-billing/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: ObjectId(id) }
+            const result = await billCollection.deleteOne(query);
+            res.send(result);
+        });
+
+        app.post('/registration', async (req, res) => {
+            const data = req.body;
+            const email = data.email
+            const userPass = data.password;
+            const password = await bcrypt.hash(userPass, 10)
+            const user = await userCollection.find({}).toArray();
+            let isUser;
+            user.forEach(us => {
+                if (us.email === email) {
+
+                    return isUser = true
+                } else {
+                    return isUser = false
+                }
+            })
+
+            if (isUser) {
+
+                console.log(isUser)
+                res.send({ message: 'User already Register' })
+            } else {
+                const newUser = { email, password }
+                const result = await userCollection.insertOne(newUser)
+                res.send(result)
+            }
+        })
+        app.post('/login', async (req, res) => {
+            const email = req.body.email;
+            const password = req.body.password;
+            const user = await userCollection.findOne({ email })
+            if (!user) {
+                return res.send({ message: 'user/password does not exist' })
+            }
+            if (bcrypt.compare(password, user.password)) {
+                const token = jwt.sign({ email: user.email }, process.env.JWT_shh,)
+                console.log(token)
+                console.log("ok")
+                return res.send({ message: 'ok done', token })
+            }
+            res.send({ message: 'user/password does not exist' });
+        })
+
+    } finally {
+
+    }
 }
 run().catch(console.dir);
 
