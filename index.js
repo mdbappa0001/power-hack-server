@@ -13,37 +13,52 @@ app.use(express.json())
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.jl5j5.mongodb.net/?retryWrites=true&w=majority`;
-
+const { json } = require('express');
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
-// function verifyJWT(req, res, next) {
-//     const authHeader = req.headers.authorization;
-//     if (!authHeader) {
-//       return res.status(401).send({ message: 'UnAuthorized access' });
-//     }
-//     const token = authHeader.split(' ')[1];
-//     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function (err, decoded) {
-//       if (err) {
-//         return res.status(403).send({ message: 'Forbidden access' })
-//       }
-//       req.decoded = decoded;
-//       next();
-//     });
-//   }
+const verifyJWT = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return res.status(401).send({ message: 'Unauthorized Access' })
+    }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.JWT_shh, function (err, decoded) {
+        if (err) {
+            return res.status(403).send({ message: 'Forbidden Access' })
+        }
+        req.decoded = decoded
+        next()
+    });
+}
 
-  async function run() {
+async function run() {
     try {
         await client.connect();
         const billCollection = client.db("powerHack").collection("bills");
         const userCollection = client.db("powerHack").collection("user");
 
-        app.get('/billing-list', async (req, res) => {
-            const query = {}
+        app.get('/billing-list', verifyJWT, async (req, res) => {
+            let query = {};
+            const searched = req.query.search;
             const page = parseInt(req.query.page)
-            const searched = req.query.searched
             const size = 10;
-            const result = await billCollection.find(query).sort({ _id: -1 }).skip(page * 10).limit(size).toArray()
-            res.send({ result })
+            if (searched) {
+                const result = await billCollection.find({
+                    "$or": [
+                        { "fullName": { $regex: req.query.search } },
+                        { "phone": { $regex: req.query.search } },
+                        { "email": { $regex: req.query.search } }
+
+                    ]
+                }).sort({ _id: -1 }).skip(page * 10).limit(size).toArray()
+                return res.send({ result })
+            }
+            else {
+                const result = await billCollection.find({}).sort({ _id: -1 }).skip(page * 10).limit(size).toArray()
+                return res.send({ result })
+            }
+
+
         })
         app.get('/billingCount', async (req, res) => {
             const count = await billCollection.estimatedDocumentCount()
@@ -52,12 +67,12 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 
 
 
-        app.post('/add-billing', async (req, res) => {
+        app.post('/add-billing', verifyJWT, async (req, res) => {
             const billing = req.body;
             const result = await billCollection.insertOne(billing)
             res.send(result)
         })
-        app.put('/update-billing/:id', async (req, res) => {
+        app.put('/update-billing/:id', verifyJWT, async (req, res) => {
             const id = req.params.id;
             const newBill = req.body;
             const filter = { _id: ObjectId(id) }
@@ -93,9 +108,8 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
             })
 
             if (isUser) {
-
                 console.log(isUser)
-                res.send({ message: 'User already Register' })
+                res.send({ message: 'User already Registered' })
             } else {
                 const newUser = { email, password }
                 const result = await userCollection.insertOne(newUser)
@@ -109,11 +123,14 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
             if (!user) {
                 return res.send({ message: 'user/password does not exist' })
             }
-            if (bcrypt.compare(password, user.password)) {
+            if (await bcrypt.compare(password, user.password)) {
                 const token = jwt.sign({ email: user.email }, process.env.JWT_shh,)
-                console.log(token)
-                console.log("ok")
-                return res.send({ message: 'ok done', token })
+                if (token) {
+                    return res.send({ message: 'ok done', token })
+                } else {
+                    return res.send({ message: 'user/password does not exist' })
+                }
+
             }
             res.send({ message: 'user/password does not exist' });
         })
